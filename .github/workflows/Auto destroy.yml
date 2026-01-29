@@ -1,0 +1,52 @@
+name: Terraform Create and Auto-Destroy (5 min)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  create_wait_destroy:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.TF_VAR_aws_region || 'ap-south-1' }}
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform apply (do not stop workflow if it fails)
+        continue-on-error: true
+        env:
+          TF_VAR_aws_region:    ${{ secrets.TF_VAR_aws_region }}
+          TF_VAR_vpc_id:        ${{ secrets.TF_VAR_vpc_id }}
+          TF_VAR_subnet_id:     ${{ secrets.TF_VAR_subnet_id }}
+          TF_VAR_key_pair_name: ${{ secrets.TF_VAR_key_pair_name }}
+        run: terraform apply -auto-approve
+
+      - name: Wait 5 minutes
+        run: sleep 300
+
+      - name: Terraform destroy (always runs)
+        if: always()
+        env:
+          TF_VAR_aws_region:    ${{ secrets.TF_VAR_aws_region }}
+          TF_VAR_vpc_id:        ${{ secrets.TF_VAR_vpc_id }}
+          TF_VAR_subnet_id:     ${{ secrets.TF_VAR_subnet_id }}
+          TF_VAR_key_pair_name: ${{ secrets.TF_VAR_key_pair_name }}
+        run: terraform destroy -auto-approve
